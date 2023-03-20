@@ -28,15 +28,19 @@ fun main(args: Array<String>) {
     val parser = ArgParser("./chuck.kexe %Model Id%")
     val model by parser.argument(ArgType.String, description = "Model Id to use (gpt-4, gpt-3.5-turbo, etc.)")
     parser.parse(args)
-    println("Hello, I'm Chuck, your OpenAI assistant")
+    println("Hello, I'm Chuck, your OpenAI assistant. Ask me questions, or type 'bye' to exit, 'ok' to start a new conversation.")
     runBlocking {
         val openAI = OpenAI(OpenAIConfig(token, LogLevel.None))
         val conversation = mutableListOf<ChatMessage>()
         while (true) {
             print("🤖 ")
             val input = readln()
-            if (input == "exit") {
-                break
+            when (input) {
+                "ok" -> {
+                    conversation.clear()
+                    continue
+                }
+                "bye" -> break
             }
             conversation.add(
                 ChatMessage(
@@ -65,8 +69,8 @@ fun main(args: Array<String>) {
                 ))
             } catch (e: Exception) {
                 val openAIAPIException = e.cause as? OpenAIAPIException
-                println(openAIAPIException ?: e.message)
-                break
+                val errorMessage: String = (openAIAPIException ?: e).toString()
+                println("I'm having some difficulties:\n$errorMessage")
             } finally {
                 progress.cancelAndJoin()
                 showCursor()
