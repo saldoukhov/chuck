@@ -63,12 +63,13 @@ fun main(args: Array<String>) {
                     role = ChatRole.Assistant,
                     content = response
                 ))
-                progress.cancelAndJoin()
-                showCursor()
             } catch (e: Exception) {
                 val openAIAPIException = e.cause as? OpenAIAPIException
                 println(openAIAPIException ?: e.message)
                 break
+            } finally {
+                progress.cancelAndJoin()
+                showCursor()
             }
         }
     }
