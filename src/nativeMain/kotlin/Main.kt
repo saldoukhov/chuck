@@ -27,8 +27,8 @@ fun main(args: Array<String>) {
     val token = requireNotNull(apiKey) { "OPENAI_API_KEY environment variable must be set." }
     val parser = ArgParser("./chuck.kexe %Model Id%")
     val model by parser.argument(ArgType.String, description = "Model Id to use (gpt-4, gpt-3.5-turbo, etc.)")
-    val oks = listOf("ok", "OK");
-    val byes = listOf("bye", "BYE")
+    val oks = listOf("ok", "reset", "new")
+    val byes = listOf("bye", "exit", "quit", "q")
     parser.parse(args)
     println("Hello, I'm Chuck, your OpenAI assistant. Ask me questions, or type 'bye' to exit, 'ok' to start a new conversation.")
     runBlocking {
@@ -37,10 +37,10 @@ fun main(args: Array<String>) {
         while (true) {
             print("🤖 ")
             val input = readln()
-            if (input.trim().length == 0) {
-                continue;
+            if (input.trim().isEmpty()) {
+                continue
             }
-            when (input) {
+            when (input.lowercase()) {
                 in oks -> {
                     conversation.clear()
                     continue
@@ -66,6 +66,7 @@ fun main(args: Array<String>) {
                 )
                 val completion: ChatCompletion = openAI.chatCompletion(chatCompletionRequest)
                 val response = completion.choices[0].message?.content ?: break
+                println()
                 println(response)
                 conversation.add(
                     ChatMessage(
