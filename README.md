@@ -12,6 +12,11 @@ Chuck is a command-line interface to OpenAI applications such as ChatGPT.
 
 The output is in `build/bin/native/releaseExecutable`
 
+If you have trouble compiling because the libcurl dependencies missing, install libcurl, f.e.
+```shell
+sudo apt-get update
+sudo apt-get install -y libcurl4-openssl-dev
+```
 
 ## Using Chuck
 Set an environment variable with your OPENAPI key from platform.openai.com:

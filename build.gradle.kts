@@ -5,7 +5,7 @@ plugins {
 val ktorVersion: String by project
 
 group = "us.yozik"
-version = "1.0-SNAPSHOT"
+version = "1.0"
 
 repositories {
     mavenCentral()
@@ -32,8 +32,9 @@ kotlin {
         val nativeMain by getting {
             dependencies {
                 implementation("com.aallam.openai:openai-client:3.1.1")
-                implementation("io.ktor:ktor-client-darwin:$ktorVersion")
+                implementation("io.ktor:ktor-client-curl:$ktorVersion")
                 implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.5")
+                implementation("com.varabyte.kotter:kotter:1.1.0-rc4")
             }
         }
     }
