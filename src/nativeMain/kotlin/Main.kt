@@ -22,7 +22,6 @@ import kotlinx.cli.ArgType
 import platform.posix.getenv
 import kotlin.time.Duration.Companion.seconds
 
-@OptIn(BetaOpenAI::class)
 fun main(args: Array<String>) {
     val apiKey = getenv("OPENAI_API_KEY")?.toKString()
     val token = requireNotNull(apiKey) { "OPENAI_API_KEY environment variable must be set." }
@@ -81,8 +80,10 @@ fun getQuestion(session: Session, chuck: Chuck, systemMode: Boolean): String {
             input()
         }.runUntilSignal {
             onInputEntered {
-                question = input
-                signal()
+                if (input.trim().isNotEmpty()) {
+                    question = input
+                    signal()
+                }
             }
             onKeyPressed {
                 when (key) {
@@ -102,7 +103,7 @@ fun getQuestion(session: Session, chuck: Chuck, systemMode: Boolean): String {
 
 fun getAnswer(session: Session, chuck: Chuck, question: String): String {
     with(session) {
-        var counter by liveVarOf(0)
+        var counter by liveVarOf(1)
         var answer by liveVarOf("")
         section {
             scopedState {
