@@ -12,6 +12,7 @@ import com.varabyte.kotter.foundation.input.*
 import com.varabyte.kotter.foundation.liveVarOf
 import com.varabyte.kotter.foundation.runUntilSignal
 import com.varabyte.kotter.foundation.session
+import com.varabyte.kotter.foundation.text.red
 import com.varabyte.kotter.foundation.text.text
 import com.varabyte.kotter.foundation.text.textLine
 import com.varabyte.kotter.foundation.timer.addTimer
@@ -35,9 +36,13 @@ fun main(args: Array<String>) {
         run {
             section {
                 textLine(
-                    "Hello, I'm Chuck, your OpenAI assistant. Ask me questions, " +
-                            "or type: \n'bye' to exit \n'ok' to start a new conversation \n'sys' to set the system message"
+                    "Hello, I'm Chuck, your OpenAI assistant. Ask me questions, or type: \n"
                 )
+                red { text("\tbye") }; textLine(" to exit")
+                red { text("\tok") }; textLine("  to start a new conversation")
+                red { text("\tsys") }; textLine(" to set the system message")
+                red { text("\t?") }; textLine("   to see the current conversation system message and questions")
+                textLine()
             }
         }.run()
         var systemMode = false
@@ -47,6 +52,11 @@ fun main(args: Array<String>) {
                 when (question.lowercase()) {
                     "sys" -> {
                         systemMode = true
+                        return@run
+                    }
+
+                    "?" -> {
+                        printState(this, chuck.getState())
                         return@run
                     }
 
@@ -80,8 +90,8 @@ fun getQuestion(session: Session, chuck: Chuck, systemMode: Boolean): String {
             input()
         }.runUntilSignal {
             onInputEntered {
-                if (input.trim().isNotEmpty()) {
-                    question = input
+                question = input.trim()
+                if (question.isNotEmpty() || systemMode) {
                     signal()
                 }
             }
@@ -114,6 +124,16 @@ fun getAnswer(session: Session, chuck: Chuck, question: String): String {
             answer = chuck.processQuestion(question)
         }
         return answer
+    }
+}
+
+fun printState(session: Session, state: List<String>) {
+    with(session) {
+        section {
+            state.forEach {
+                textLine(it)
+            }
+        }.run()
     }
 }
 
@@ -159,10 +179,15 @@ constructor(private val service: OpenAI, private val model: String) {
     }
 
     fun setSystemMessage(question: String) {
-        systemMessage = ChatMessage(
-            role = ChatRole.System,
-            content = question
-        )
+        if (question.isEmpty()) {
+            systemMessage = null
+        } else {
+            history.add(0, question)
+            systemMessage = ChatMessage(
+                role = ChatRole.System,
+                content = question
+            )
+        }
     }
 
     fun clear() {
@@ -185,6 +210,15 @@ constructor(private val service: OpenAI, private val model: String) {
             }
         }
         return history[historyIdx]
+    }
+
+    fun getState(): List<String> {
+        val state = conversation.filter { it.role != ChatRole.Assistant }.map { it.content }.toMutableList()
+        val systemMsg = systemMessage
+        if (systemMsg != null) {
+            state.add(0, "⚙️  " + systemMsg.content)
+        }
+        return state
     }
 }
 
