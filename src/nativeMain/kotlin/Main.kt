@@ -1,9 +1,8 @@
 import com.aallam.openai.api.BetaOpenAI
-import com.aallam.openai.api.chat.ChatCompletion
+import com.aallam.openai.api.chat.ChatCompletionChunk
 import com.aallam.openai.api.chat.ChatCompletionRequest
 import com.aallam.openai.api.chat.ChatMessage
 import com.aallam.openai.api.chat.ChatRole
-import com.aallam.openai.api.exception.OpenAIAPIException
 import com.aallam.openai.api.logging.LogLevel
 import com.aallam.openai.api.model.ModelId
 import com.aallam.openai.client.OpenAI
@@ -15,13 +14,12 @@ import com.varabyte.kotter.foundation.session
 import com.varabyte.kotter.foundation.text.red
 import com.varabyte.kotter.foundation.text.text
 import com.varabyte.kotter.foundation.text.textLine
-import com.varabyte.kotter.foundation.timer.addTimer
 import com.varabyte.kotter.runtime.Session
 import kotlinx.cinterop.toKString
 import kotlinx.cli.ArgParser
 import kotlinx.cli.ArgType
+import kotlinx.coroutines.flow.*
 import platform.posix.getenv
-import kotlin.time.Duration.Companion.seconds
 
 fun main(args: Array<String>) {
     val apiKey = getenv("OPENAI_API_KEY")?.toKString()
@@ -73,10 +71,7 @@ fun main(args: Array<String>) {
                     chuck.setSystemMessage(question)
                     return@run
                 }
-                val answer = getAnswer(this, chuck, question)
-                section {
-                    textLine(answer)
-                }.run()
+                chuck.addAnswer(getChuckAnswerAsBuffer(this, chuck, question))
             }
         }
     }
@@ -87,7 +82,7 @@ fun getQuestion(session: Session, chuck: Chuck, systemMode: Boolean): String {
         var question by liveVarOf("")
         section {
             text(if (systemMode) "⚙️  " else "🤖 ")
-            input()
+            input(initialText = if (systemMode) chuck.getSystemMessage() else "")
         }.runUntilSignal {
             onInputEntered {
                 question = input.trim()
@@ -111,19 +106,32 @@ fun getQuestion(session: Session, chuck: Chuck, systemMode: Boolean): String {
     }
 }
 
-fun getAnswer(session: Session, chuck: Chuck, question: String): String {
+fun getChuckAnswerAsBuffer(session: Session, chuck: Chuck, question: String): String {
+    val bufferSize = 30
     with(session) {
-        var counter by liveVarOf(1)
-        var answer by liveVarOf("")
+        var currentAnswer: Chuck.Answer = Chuck.Answer()
+        var completed = false
         section {
-            scopedState {
-                text("💬".repeat(counter))
+            val lines = if (completed || currentAnswer.lines.count() <= bufferSize)
+                currentAnswer.lines
+            else
+                listOf("^".repeat(64)) + currentAnswer.lines.takeLast(bufferSize)
+            for (line in lines) {
+                textLine(line)
+            }
+            val cl = currentAnswer.currentLine
+            if (cl != null) {
+                text(cl)
             }
         }.run {
-            addTimer(1.seconds, repeat = true) { counter += 1 }
-            answer = chuck.processQuestion(question)
+            chuck.processQuestionAsBuffer(question).collect {
+                currentAnswer = it
+                rerender()
+            }
+            completed = true
+            rerender()
         }
-        return answer
+        return currentAnswer.lines.joinToString(separator = "\n")
     }
 }
 
@@ -138,14 +146,13 @@ fun printState(session: Session, state: List<String>) {
 }
 
 @OptIn(BetaOpenAI::class)
-class Chuck
-constructor(private val service: OpenAI, private val model: String) {
+class Chuck(private val service: OpenAI, private val model: String) {
     private val conversation: MutableList<ChatMessage> = mutableListOf()
     private val history: MutableList<String> = mutableListOf()
     private var historyIdx: Int = -1
     private var systemMessage: ChatMessage? = null
 
-    suspend fun processQuestion(question: String): String {
+    private fun processQuestion(question: String): Flow<String> {
         history.add(0, question)
         conversation.add(
             ChatMessage(
@@ -153,37 +160,41 @@ constructor(private val service: OpenAI, private val model: String) {
                 content = question
             )
         )
-        var answer = ""
-        try {
-            val messages = if (systemMessage == null) conversation else listOf(systemMessage!!, *conversation.toTypedArray())
-            val chatCompletionRequest = ChatCompletionRequest(
-                model = ModelId(model),
-                messages = messages
-            )
-            val completion: ChatCompletion = service.chatCompletion(chatCompletionRequest)
-            val response = completion.choices[0].message?.content
-            if (response != null) {
-                answer = response
-                conversation.add(
-                    ChatMessage(
-                        role = ChatRole.Assistant,
-                        content = response
-                    )
-                )
+        val messages = if (systemMessage == null) conversation else listOf(systemMessage!!, *conversation.toTypedArray())
+        val chatCompletionRequest = ChatCompletionRequest(
+            model = ModelId(model),
+            messages = messages
+        )
+        val completion: Flow<ChatCompletionChunk> = service.chatCompletions(chatCompletionRequest)
+        return completion.map { it.choices[0].delta?.content }.filterNotNull()
+    }
+
+    data class Answer(val lines: MutableList<String> = mutableListOf(), var currentLine: String? = null)
+
+    fun processQuestionAsBuffer(question: String): Flow<Answer> {
+        val answer = Answer()
+        return processQuestion(question).transform { chunk ->
+            val cl = (answer.currentLine ?: "") + chunk
+            if (cl.endsWith('\n')) {
+                answer.lines.add(cl.trimEnd('\n'))
+                answer.currentLine = null
+            } else {
+                answer.currentLine = cl
             }
-        } catch (e: Exception) {
-            val openAIAPIException = e.cause as? OpenAIAPIException
-            answer = (openAIAPIException ?: e).toString()
+            emit(answer)
         }
-        return answer
+    }
+
+    fun getSystemMessage(): String {
+        return systemMessage?.content ?: ""
     }
 
     fun setSystemMessage(question: String) {
-        if (question.isEmpty()) {
-            systemMessage = null
+        systemMessage = if (question.isEmpty()) {
+            null
         } else {
             history.add(0, question)
-            systemMessage = ChatMessage(
+            ChatMessage(
                 role = ChatRole.System,
                 content = question
             )
@@ -220,5 +231,13 @@ constructor(private val service: OpenAI, private val model: String) {
         }
         return state
     }
-}
 
+    fun addAnswer(answer: String) {
+        conversation.add(
+            ChatMessage(
+                role = ChatRole.Assistant,
+                content = answer
+            )
+        )
+    }
+}
