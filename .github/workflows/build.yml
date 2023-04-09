@@ -1,0 +1,25 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'corretto'
+      - name: Build with Gradle
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: current
+          arguments: linkReleaseExecutableNative
+      - name: Upload MacOS Build
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-build
+          path: build/bin/native/releaseExecutable/chuck.kexe
