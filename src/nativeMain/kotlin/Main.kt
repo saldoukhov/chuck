@@ -18,7 +18,10 @@ import com.varabyte.kotter.runtime.Session
 import kotlinx.cinterop.toKString
 import kotlinx.cli.ArgParser
 import kotlinx.cli.ArgType
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import platform.posix.getenv
 
 fun main(args: Array<String>) {
@@ -34,13 +37,8 @@ fun main(args: Array<String>) {
         run {
             section {
                 textLine(
-                    "Hello, I'm Chuck, your OpenAI assistant. Ask me questions, or type: \n"
+                    "\nHello, I'm Chuck, your OpenAI assistant. Ask me questions, or type ? for help\n"
                 )
-                red { text("\tbye") }; textLine(" to exit")
-                red { text("\tok") }; textLine("  to start a new conversation")
-                red { text("\tsys") }; textLine(" to set the system message")
-                red { text("\t?") }; textLine("   to see the current conversation system message and questions")
-                textLine()
             }
         }.run()
         var systemMode = false
@@ -54,6 +52,11 @@ fun main(args: Array<String>) {
                     }
 
                     "?" -> {
+                        printHelp(this)
+                        return@run
+                    }
+
+                    "??" -> {
                         printState(this, chuck.getState())
                         return@run
                     }
@@ -123,15 +126,44 @@ fun getChuckAnswerAsBuffer(session: Session, chuck: Chuck, question: String): St
             if (cl != null) {
                 text(cl)
             }
-        }.run {
-            chuck.processQuestionAsBuffer(question).collect {
-                currentAnswer = it
+        }.runUntilSignal {
+            var cancelled = false
+            CoroutineScope(Dispatchers.Default).launch {
+                try {
+                    chuck.processQuestionAsBuffer(question)
+                        .takeWhile { !cancelled }
+                        .collect {
+                            currentAnswer = it
+                            rerender()
+                        }
+                    completed = true
+                } catch (_: Exception) {
+                }
                 rerender()
+                signal()
             }
-            completed = true
-            rerender()
+
+            onKeyPressed {
+                when (key) {
+                    Keys.ESC -> {
+                        cancelled = true
+                    }
+                }
+            }
         }
         return currentAnswer.lines.joinToString(separator = "\n")
+    }
+}
+
+fun printHelp(session: Session) {
+    with(session) {
+        section {
+            red { text("\tsys") }; textLine(" to set the system message")
+            red { text("\tesc") }; textLine(" to stop the answer before completion")
+            red { text("\t??") }; textLine("  to see the current conversation system message and questions")
+            red { text("\tok") }; textLine("  to start a new conversation")
+            red { text("\tbye") }; textLine(" to exit")
+        }.run()
     }
 }
 
