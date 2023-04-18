@@ -28,4 +28,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: chuck-${{ matrix.os }}
-          path: build/bin/native/releaseExecutable/chuck.kexe
+          path: build/bin/native/releaseExecutable/*
