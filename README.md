@@ -2,6 +2,8 @@
 
 Chuck is a command-line interface to OpenAI applications such as ChatGPT.
 
+![Chuck in action](https://github.com/saldoukhov/media/raw/main/chuck/chuck-demo.gif)
+
 ## Requirements
 + Updated XCode.  If you get an error when runnning `xcrun`, do this:
    + `sudo rm -rf /Library/Developer/CommandLineTools`
