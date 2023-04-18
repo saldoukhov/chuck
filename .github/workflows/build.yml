@@ -16,12 +16,15 @@ jobs:
         with:
           java-version: '17'
           distribution: 'corretto'
+      - name: Install libcurl on Ubuntu
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
       - name: Build with Gradle
         uses: gradle/gradle-build-action@v2
         with:
           gradle-version: current
           arguments: linkReleaseExecutableNative
-      - name: Upload MacOS Build
+      - name: Upload build
         uses: actions/upload-artifact@v3
         with:
           name: chuck-${{ matrix.os }}
