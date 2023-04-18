@@ -151,7 +151,7 @@ fun getChuckAnswerAsBuffer(session: Session, chuck: Chuck, question: String): St
                 }
             }
         }
-        return currentAnswer.lines.joinToString(separator = "\n")
+        return currentAnswer.lines.joinToString(separator = "\n") + (currentAnswer.currentLine ?: "")
     }
 }
 
