@@ -74,6 +74,13 @@ fun main(args: Array<String>) {
                     chuck.setSystemMessage(question)
                     return@run
                 }
+                if (question.startsWith('@')) {
+                    val temperature = question.substring(1..3).toDoubleOrNull()
+                    if (temperature != null && temperature in 0.0..2.0) {
+                        chuck.setTemperature(temperature)
+                        return@run
+                    }
+                }
                 chuck.addAnswer(getChuckAnswerAsBuffer(this, chuck, question))
             }
         }
@@ -158,11 +165,12 @@ fun getChuckAnswerAsBuffer(session: Session, chuck: Chuck, question: String): St
 fun printHelp(session: Session) {
     with(session) {
         section {
-            red { text("\tsys") }; textLine(" to set the system message")
-            red { text("\tesc") }; textLine(" to stop the answer before completion")
-            red { text("\t??") }; textLine("  to see the current conversation system message and questions")
-            red { text("\tok") }; textLine("  to start a new conversation")
-            red { text("\tbye") }; textLine(" to exit")
+            red { text("\tsys") }; textLine("  to set the system message")
+            red { text("\tesc") }; textLine("  to stop the answer before completion")
+            red { text("\t??") }; textLine("   to see the current conversation system message and questions")
+            red { text("\tok") }; textLine("   to start a new conversation")
+            red { text("\t@#.#") }; textLine(" to set a temperature. #.# is a number between 0.0 and 2.0. Default value 1.0. Higher - more random answers.")
+            red { text("\tbye") }; textLine("  to exit")
         }.run()
     }
 }
@@ -183,6 +191,7 @@ class Chuck(private val service: OpenAI, private val model: String) {
     private val history: MutableList<String> = mutableListOf()
     private var historyIdx: Int = -1
     private var systemMessage: ChatMessage? = null
+    private var temperature: Double? = null
 
     private fun processQuestion(question: String): Flow<String> {
         history.add(0, question)
@@ -195,7 +204,8 @@ class Chuck(private val service: OpenAI, private val model: String) {
         val messages = if (systemMessage == null) conversation else listOf(systemMessage!!, *conversation.toTypedArray())
         val chatCompletionRequest = ChatCompletionRequest(
             model = ModelId(model),
-            messages = messages
+            messages = messages,
+            temperature = temperature
         )
         val completion: Flow<ChatCompletionChunk> = service.chatCompletions(chatCompletionRequest)
         return completion.map { it.choices[0].delta?.content }.filterNotNull()
@@ -233,8 +243,13 @@ class Chuck(private val service: OpenAI, private val model: String) {
         }
     }
 
+    fun setTemperature(value: Double) {
+        temperature = value
+    }
+
     fun clear() {
         systemMessage = null
+        temperature = null
         conversation.clear()
     }
 
@@ -260,6 +275,9 @@ class Chuck(private val service: OpenAI, private val model: String) {
         val systemMsg = systemMessage
         if (systemMsg != null) {
             state.add(0, "⚙️  " + systemMsg.content)
+        }
+        if (temperature != null) {
+            state.add(0, "🌡️️  " + temperature.toString())
         }
         return state
     }
