@@ -81,7 +81,7 @@ fun main(args: Array<String>) {
                         return@run
                     }
                 }
-                chuck.addAnswer(getChuckAnswerAsBuffer(this, chuck, question))
+                chuck.addAnswer(getChuckAnswer(this, chuck, question))
             }
         }
     }
@@ -116,37 +116,23 @@ fun getQuestion(session: Session, chuck: Chuck, systemMode: Boolean): String {
     }
 }
 
-fun getChuckAnswerAsBuffer(session: Session, chuck: Chuck, question: String): String {
-    val bufferSize = 30
+fun getChuckAnswer(session: Session, chuck: Chuck, question: String): String {
     with(session) {
-        var currentAnswer: Chuck.Answer = Chuck.Answer()
-        var completed = false
+        var answer = ""
         section {
-            val lines = if (completed || currentAnswer.lines.count() <= bufferSize)
-                currentAnswer.lines
-            else
-                listOf("^".repeat(64)) + currentAnswer.lines.takeLast(bufferSize)
-            for (line in lines) {
-                textLine(line)
-            }
-            val cl = currentAnswer.currentLine
-            if (cl != null) {
-                text(cl)
-            }
         }.runUntilSignal {
             var cancelled = false
             CoroutineScope(Dispatchers.Default).launch {
                 try {
-                    chuck.processQuestionAsBuffer(question)
+                    chuck.processQuestion(question)
                         .takeWhile { !cancelled }
                         .collect {
-                            currentAnswer = it
-                            rerender()
+                            answer += it
+                            print(it)
                         }
-                    completed = true
                 } catch (_: Exception) {
                 }
-                rerender()
+                println('\n')
                 signal()
             }
 
@@ -158,7 +144,7 @@ fun getChuckAnswerAsBuffer(session: Session, chuck: Chuck, question: String): St
                 }
             }
         }
-        return currentAnswer.lines.joinToString(separator = "\n") + (currentAnswer.currentLine ?: "")
+        return answer
     }
 }
 
@@ -193,7 +179,7 @@ class Chuck(private val service: OpenAI, private val model: String) {
     private var systemMessage: ChatMessage? = null
     private var temperature: Double? = null
 
-    private fun processQuestion(question: String): Flow<String> {
+    fun processQuestion(question: String): Flow<String> {
         history.add(0, question)
         conversation.add(
             ChatMessage(
@@ -209,22 +195,6 @@ class Chuck(private val service: OpenAI, private val model: String) {
         )
         val completion: Flow<ChatCompletionChunk> = service.chatCompletions(chatCompletionRequest)
         return completion.map { it.choices[0].delta?.content }.filterNotNull()
-    }
-
-    data class Answer(val lines: MutableList<String> = mutableListOf(), var currentLine: String? = null)
-
-    fun processQuestionAsBuffer(question: String): Flow<Answer> {
-        val answer = Answer()
-        return processQuestion(question).transform { chunk ->
-            val cl = (answer.currentLine ?: "") + chunk
-            if (cl.endsWith('\n')) {
-                answer.lines.add(cl.trimEnd('\n'))
-                answer.currentLine = null
-            } else {
-                answer.currentLine = cl
-            }
-            emit(answer)
-        }
     }
 
     fun getSystemMessage(): String {

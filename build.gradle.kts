@@ -6,8 +6,8 @@ plugins {
 
 val ktorVersion: String by project
 
-group = "us.yozik"
-version = "1.0.1"
+group = "us.saldoukhov"
+version = "1.0.2"
 
 repositories {
     mavenCentral()
