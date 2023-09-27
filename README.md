@@ -28,7 +28,7 @@ export OPENAI_API_KEY="srmo...39"
 ```
 Set a useful alias:
 ```shell
-$ alias chuck='..../build/bin/native/releaseExecutable/chuck.kexe gpt-3.5-turbo'
+$ alias chuck='..../build/bin/native/releaseExecutable/chuck.kexe gpt-4'
 ```
 
 ```shell
